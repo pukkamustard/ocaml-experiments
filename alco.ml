@@ -3,7 +3,11 @@ module To_test = struct
   let plus int_list = List.fold_left (fun a b -> a + b) 0 int_list
 end
 
-(* The tests *)
+(* The test functions
+
+   Tests are just fust functions of type `unit -> unit`.
+
+*)
 let capit () =
   Alcotest.check Alcotest.char "same chars"  'A' (To_test.capit 'a')
 
@@ -16,6 +20,13 @@ let sleep () =
 let command () =
   Alcotest.check Alcotest.int "command exits with 0" 0 (Sys.command "ps -ef")
 
+
+(* List of test cases
+
+   A list of Alcotest.test, which is a triple of a documentation string speed level and test fuction.
+
+   Speed level is a boolean (isomorphic) indicating if the test case will be run in quick mode (with command mode option `-q`).
+*)
 let test_set = [
   "Capitalize" , `Quick, capit;
   "Add entries", `Slow , plus ;

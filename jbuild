@@ -2,7 +2,7 @@
 
 (executables
   ((names 
-    (alco ounit_example syscommand tcpserver))
+    (alco ounit_example qcheck_example syscommand tcpserver))
    (libraries 
      (qcheck alcotest lwt lwt.unix batteries))
   ))
