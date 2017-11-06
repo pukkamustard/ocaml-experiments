@@ -2,9 +2,7 @@
 
 (executables
   ((names 
-    (simple syscommand tcpserver))
+    (alco syscommand tcpserver))
    (libraries 
      (alcotest lwt lwt.unix batteries))
-   (preprocess
-     (pps (lwt.ppx)))
   ))
