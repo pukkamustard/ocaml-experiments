@@ -46,4 +46,5 @@ let () =
   Alcotest.run ~and_exit:false "Second test suite" [
     "whasdf", test2;
   ];
-  print_endline "I'm done"
+  (*Following line is to test usage of internal libraries*)
+  print_endline Internal_lib.A.message
