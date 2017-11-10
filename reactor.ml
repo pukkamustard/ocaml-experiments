@@ -46,30 +46,46 @@ end
 
 
 module App : sig
-  val make: init:(unit -> ('state, 'msg Lwt.t) Return.t) -> update:('state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> unit Lwt.u * 'state Lwt_react.event
+  val create: init:(unit -> ('state, 'msg Lwt.t) Return.t) -> update:(stop:'a Lwt.u -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> unit Lwt.u * 'state Lwt_react.signal * 'a Lwt.t
 end = struct
-  let make ~init ~update =
+  let create ~init ~update =
     (* message events *)
     let msg_e, send_msg = E.create () in
+
     (* command events *)
     let cmd_e, send_cmd = E.create () in
 
     (* run the commands and send results on as messages *)
-    let _ = cmd_e |> E.map (fun t -> Lwt.on_success t send_msg) in
+    (* Note: we need to keep this from the garbage collector *)
+    cmd_e 
+      |> E.map (fun t -> Lwt.on_success t send_msg)
+      |> E.keep;
 
-    (* we need the init state but can not run init effects before the msg handling is set up *)
+    (* we need the initial state but can not run initial effects before the msg handling is set up *)
     let wait_for_start, start = Lwt.wait () in
     let init_state = init ()
       |> Return.map_cmd (fun cmd -> wait_for_start >>= fun () -> cmd)
       |> Return.run send_cmd
     in
 
+    (* allow the app to stop itself with a return value *)
+    let stop_promise, stop = Lwt.wait () in
+
     (* run update function on message event *)
     (* Note: we need to use fold_s to ensure atomic updates *)
-    let state_e = E.fold_s (fun state msg -> update state msg |> Return.run send_cmd |> return) init_state msg_e in
+    let state = S.fold_s (fun state msg -> update ~stop:stop state msg |> Return.run send_cmd |> return) init_state msg_e in
 
-    (* Return up start resolver and state events *)
-    (start, state_e)
+    (* stop state and pending side effects *)
+    let stop_promise = 
+      stop_promise >>= fun value ->
+      Lwt_react.E.stop msg_e;
+      Lwt_react.E.stop cmd_e;
+      Lwt_react.S.stop state;
+      return value 
+    in
+
+    (* Return up start resolver and state signal and promis that is resolved when app stops *)
+    (start, state, stop_promise)
 end
 
 type state = string
@@ -83,21 +99,26 @@ let init () =
     |> Return.singleton
     |> Return.command (return Ping)
 
-let update state = function
+let update ~stop state = function
   | Ping -> 
-    print_endline "Ping";
+    if state > 2 then Lwt.wakeup stop state else ();
     state + 1
       |> Return.singleton
       |> Return.command (return Pong)
   | Pong ->
-    print_endline "Pong";
-    state - 1
+    state
       |> Return.singleton
       |> Return.command (Lwt_unix.sleep 1.0 >>= fun () -> return Ping)
 
 
 let () = 
-  let (start, state) = App.make init update in
-  let _ = E.map print_int state in
+  let (start, state, app) = App.create init update in
+  S.map (fun state -> Printf.sprintf "State: %d\n" state |> print_string) state
+    |> S.keep;
+  (* try removing the S.keep *)
+  Gc.full_major ();
+
   Lwt.wakeup start ();
-  Lwt_main.run @@ (fst @@ Lwt.wait ())
+  Lwt_main.run @@ (app >>= fun value -> 
+                   Printf.sprintf "App returned with value: %d\n" value |> print_string;
+                   return ())
