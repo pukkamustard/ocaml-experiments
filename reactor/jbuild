@@ -1,0 +1,6 @@
+(jbuild_version 1)
+
+(library
+  ((name reactor)
+   (libraries (lwt lwt_react batteries))))
+

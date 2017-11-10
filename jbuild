@@ -2,7 +2,7 @@
 
 (executables
   ((names 
-    (reactor alco ounit_example qcheck_example syscommand tcpserver))
+    (ping alco ounit_example qcheck_example syscommand tcpserver))
    (libraries 
-     (lwt_react qcheck alcotest lwt lwt.unix batteries internal_lib))
+     (reactor lwt_react qcheck alcotest lwt lwt.unix batteries internal_lib))
   ))
