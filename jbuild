@@ -1,8 +1,6 @@
 (jbuild_version 1)
 
+
 (executables
-  ((names 
-    (ping alco ounit_example qcheck_example syscommand tcpserver))
-   (libraries 
-     (reactor lwt_react qcheck alcotest lwt lwt.unix batteries internal_lib))
-  ))
+ ((names (ping echo))
+  (libraries (reactor tcp lwt_react lwt lwt.unix))))
