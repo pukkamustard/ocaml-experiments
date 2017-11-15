@@ -2,5 +2,5 @@
 
 
 (executables
- ((names (ping echo))
-  (libraries (reactor tcp lwt_react lwt lwt.unix))))
+ ((names (ping echo sum sum_test test_open))
+  (libraries (angstrom reactor tcp lwt_react lwt lwt.unix))))

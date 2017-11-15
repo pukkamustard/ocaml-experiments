@@ -5,7 +5,7 @@ open Reactor
 (** Example app using Reactor for functional reactive programming *)
 
 type msg =
-    Ping 
+    Ping
   | Pong
 
 let init () =
@@ -15,7 +15,7 @@ let init () =
 
 let update ~stop state = function
   | Ping -> 
-    if state > 2 then Lwt.wakeup stop state else ();
+   if state > 2 then stop state else ();
     state + 1
       |> Return.singleton
       |> Return.command (return Pong)

@@ -46,9 +46,12 @@ end
 
 
 module App : sig
-  val create: init:(unit -> ('state, 'msg Lwt.t) Return.t) -> update:(stop:'a Lwt.u -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> unit Lwt.u * 'state Lwt_react.signal * 'a Lwt.t
+  val create: ?eq:('state -> 'state -> bool) -> init:(unit -> ('state, 'msg Lwt.t) Return.t) -> update:(stop:('a -> unit) -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> unit Lwt.u * 'state Lwt_react.signal * 'a Lwt.t
 end = struct
-  let create ~init ~update =
+  let create ?eq ~init ~update =
+    
+    let eq = match eq with None -> fun a b -> a == b | Some eq -> eq in
+
     (* message events *)
     let msg_e, send_msg = E.create () in
 
@@ -71,9 +74,12 @@ end = struct
     (* allow the app to stop itself with a return value *)
     let stop_promise, stop = Lwt.wait () in
 
+    (* wrap Lwt.wakeup *)
+    let stop = Lwt.wakeup stop in
+
     (* run update function on message event *)
     (* Note: we need to use fold_s to ensure atomic updates *)
-    let state = S.fold_s (fun state msg -> update ~stop:stop state msg |> Return.run send_cmd |> return) init_state msg_e in
+    let state = S.fold_s ~eq:eq (fun state msg -> update ~stop:stop state msg |> Return.run send_cmd |> return) init_state msg_e in
 
     (* stop state and pending side effects *)
     let stop_promise = 
