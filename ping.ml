@@ -13,24 +13,24 @@ let init () =
     |> Return.singleton
     |> Return.command (return Ping)
 
-let update ~stop state = function
+let update ~stop model = function
   | Ping -> 
-    state + 1
+    model + 1
       |> Return.singleton
-      |> Return.command (if state > 2 then
-                           stop state >>= fun () ->
+      |> Return.command (if model > 2 then
+                           stop model >>= fun () ->
                            return Pong
                          else
                            return Pong
                         )
   | Pong ->
-    state
+    model
       |> Return.singleton
       |> Return.command (Lwt_unix.sleep 0.01 >>= fun () -> return Ping)
 
 let () = 
-  let (start, state, app) = App.create init update in
-  S.map (fun state -> Printf.sprintf "State: %d\n" state |> print_string) state
+  let (start, model, app) = App.create init update in
+  S.map (fun model -> Printf.sprintf "State: %d\n" model |> print_string) model
     |> S.keep;
   (* try removing the S.keep *)
   Gc.full_major ();
