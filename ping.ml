@@ -29,14 +29,15 @@ let update ~stop model = function
       |> Return.command (Lwt_unix.sleep 0.01 >>= fun () -> return Ping)
 
 let () = 
-  let (start, model, app) = App.create init update in
-  S.map (fun model -> Printf.sprintf "State: %d\n" model |> print_string) model
+  let app = App.create init update in
+  S.map (fun model -> Printf.sprintf "State: %d\n" model |> print_string) app.model_signal
+  (* try removing the S.keep and see what the garbage collector does *)
     |> S.keep;
-  (* try removing the S.keep *)
+
   Gc.full_major ();
 
-  Lwt.wakeup start ();
-  match (Lwt_main.run app) with 
+  Lwt.wakeup app.start ();
+  match (Lwt_main.run app.result) with 
   | Ok value -> 
     Printf.sprintf "Ok: %d\n" value |> print_string;
   | Error e ->

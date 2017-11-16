@@ -46,24 +46,31 @@ end
 (** An Elm inspired way of doing functional reactive programming *)
 module App : sig
 
+  (** An app is an object with a function to start the application, a signal carrying the model and a promise that resolves to the result of the app's computation *)
   type ('a, 'model) t = 
-    unit Lwt.u * 'model Lwt_react.signal * ('a, exn) Lwt_result.t
+    { start: unit Lwt.u
+    ; model_signal : 'model Lwt_react.signal
+    ; result : ('a, exn) Lwt_result.t
+    }
 
+  (** An init function retuns the initial model and side-effects. *)
   type ('model, 'msg) init = unit -> ('model, 'msg Lwt.t) Return.t
 
   type ('a, 'model, 'msg) update = stop:('a -> unit Lwt.t) -> 'model -> 'msg -> ('model, 'msg Lwt.t) Return.t
 
+(** [create ~init:init ~update:update] creates an app described by the provided [init] and [update] functions. *)
   val create: 
     init: ('model, 'msg) init -> 
-    update:(stop:('a -> unit Lwt.t) -> 'model-> 'msg -> ('model, 'msg Lwt.t) Return.t) -> 
-    (* TODO: figure out why following line does not work *)
-    (*update:('a, 'model', 'msg) update ->*)
+    update:('a, 'model, 'msg) update ->
     ('a, 'model) t
 
 end = struct
 
   type ('a, 'model) t = 
-    unit Lwt.u * 'model Lwt_react.signal * ('a, exn) Lwt_result.t
+    { start: unit Lwt.u
+    ; model_signal : 'model Lwt_react.signal
+    ; result : ('a, exn) Lwt_result.t
+    }
 
   type ('model, 'msg) init = unit -> ('model, 'msg Lwt.t) Return.t
 
@@ -81,7 +88,7 @@ end = struct
     let cmd_e, send_cmd = E.create () in
 
     (* app result and resolver *)
-    let result, resolver = Lwt.wait () in
+    let result, resolver = Lwt.task () in
     let on_exception = fun e -> Lwt.wakeup resolver (Error e) in
     let on_stop = fun a -> return @@ Lwt.wakeup resolver (Ok a) in
 
@@ -118,5 +125,11 @@ end = struct
       return value 
     in
 
-    (start, model_signal, result)
+    (* Catch any other possible exceptions (e.g. Cancel) *)
+    let result = Lwt.catch (fun () -> result) (fun e -> return @@ Error e) in
+
+    { start = start
+    ; model_signal = model_signal
+    ; result = result
+    }
 end

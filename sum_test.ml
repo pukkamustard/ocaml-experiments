@@ -127,9 +127,9 @@ let update ~stop model = function
 
 
 let simulate events =
-  let (start, model, app) = App.create (init events) update in
-  Lwt.wakeup start ();
-  match Lwt_main.run app with
+  let app = App.create (init events) update in
+  Lwt.wakeup app.start ();
+  match Lwt_main.run app.result with
   | Ok value -> value
   | Error e -> false
 
