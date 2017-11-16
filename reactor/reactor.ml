@@ -63,10 +63,15 @@ end = struct
     (* command events *)
     let cmd_e, send_cmd = E.create () in
 
+    (* app result and resolver *)
+    let result, resolver = Lwt.wait () in
+    let on_exception = fun e -> Lwt.wakeup resolver (Error e) in
+    let on_stop = fun a -> return @@ Lwt.wakeup resolver (Ok a) in
+
     (* run the commands and send results on as messages *)
     (* Note: we need to keep this from the garbage collector *)
     cmd_e 
-      |> E.map (fun t -> Lwt.on_success t send_msg)
+      |> E.map (fun t -> Lwt.on_any t send_msg on_exception)
       |> E.keep;
 
     (* we need the initial state but can not run initial effects before the msg handling is set up *)
@@ -76,21 +81,17 @@ end = struct
       |> Return.run send_cmd
     in
 
-    (* allow the app to stop itself with a return value *)
-    let result, stop = Lwt.wait () in
-
     (* wrap Lwt.wakeup *)
-    let stop_ok = fun a -> return @@ Lwt.wakeup stop (Ok a) in
 
     (* run update function on message event *)
     (* Note: we need to use fold_s to ensure atomic updates *)
     let state = S.fold_s ~eq:eq (fun state msg -> 
         try 
-        update ~stop:stop_ok state msg 
+        update ~stop:on_stop state msg 
           |> Return.run send_cmd 
           |> return
         with
-          ex -> Lwt.wakeup stop (Error ex); state |> return
+          e -> on_exception e; state |> return
       ) init_state msg_e in
 
     (* stop state and pending side effects *)

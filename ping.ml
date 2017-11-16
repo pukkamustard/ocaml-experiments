@@ -26,8 +26,7 @@ let update ~stop state = function
   | Pong ->
     state
       |> Return.singleton
-      |> Return.command (Lwt_unix.sleep 1.0 >>= fun () -> return Ping)
-
+      |> Return.command (Lwt_unix.sleep 0.01 >>= fun () -> return Ping)
 
 let () = 
   let (start, state, app) = App.create init update in
