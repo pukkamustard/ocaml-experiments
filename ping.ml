@@ -37,6 +37,9 @@ let () =
   Gc.full_major ();
 
   Lwt.wakeup start ();
-  Lwt_main.run @@ (app >>= fun value -> 
-                   Printf.sprintf "App returned with value: %d\n" value |> print_string;
-                   return ())
+  match (Lwt_main.run app) with 
+  | Ok value -> 
+    Printf.sprintf "Ok: %d\n" value |> print_string;
+  | Error e ->
+    ("Error: " ^ Printexc.to_string e)
+      |> print_endline

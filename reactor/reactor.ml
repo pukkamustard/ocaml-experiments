@@ -1,6 +1,5 @@
 open Lwt
 open Lwt_react
-open BatPervasives
 
 
 (** Model output of update function as writer monad
@@ -49,7 +48,7 @@ module App : sig
   val create: 
     init:(unit -> ('state, 'msg Lwt.t) Return.t) -> 
     update:(stop:('a -> unit Lwt.t) -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> 
-    unit Lwt.u * 'state Lwt_react.signal * 'a Lwt.t
+    unit Lwt.u * 'state Lwt_react.signal * ('a, exn) Lwt_result.t
 
 end = struct
 
@@ -78,18 +77,25 @@ end = struct
     in
 
     (* allow the app to stop itself with a return value *)
-    let stop_promise, stop = Lwt.wait () in
+    let result, stop = Lwt.wait () in
 
     (* wrap Lwt.wakeup *)
-    let stop = fun a -> return @@ Lwt.wakeup stop a in
+    let stop_ok = fun a -> return @@ Lwt.wakeup stop (Ok a) in
 
     (* run update function on message event *)
     (* Note: we need to use fold_s to ensure atomic updates *)
-    let state = S.fold_s ~eq:eq (fun state msg -> update ~stop:stop state msg |> Return.run send_cmd |> return) init_state msg_e in
+    let state = S.fold_s ~eq:eq (fun state msg -> 
+        try 
+        update ~stop:stop_ok state msg 
+          |> Return.run send_cmd 
+          |> return
+        with
+          ex -> Lwt.wakeup stop (Error ex); state |> return
+      ) init_state msg_e in
 
     (* stop state and pending side effects *)
-    let stop_promise = 
-      stop_promise >>= fun value ->
+    let result = 
+      result >>= fun value ->
       Lwt_react.E.stop msg_e;
       Lwt_react.E.stop cmd_e;
       Lwt_react.S.stop state;
@@ -97,5 +103,5 @@ end = struct
     in
 
     (* Return up start resolver and state signal and promis that is resolved when app stops *)
-    (start, state, stop_promise)
+    (start, state, result)
 end

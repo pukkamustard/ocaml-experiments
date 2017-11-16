@@ -129,7 +129,10 @@ let update ~stop model = function
 let simulate events =
   let (start, state, app) = App.create (init events) update in
   Lwt.wakeup start ();
-  Lwt_main.run app
+  match Lwt_main.run app with
+  | Ok value -> value
+  | Error e -> false
+
 
 let events = 
   let open QCheck.Gen in

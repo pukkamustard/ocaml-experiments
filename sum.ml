@@ -6,7 +6,7 @@ type operation =
 
 let compute = function
   | Add (a,b) -> 
-      a + b + 1
+      a + b
 
 let parser =
   let open Angstrom in
