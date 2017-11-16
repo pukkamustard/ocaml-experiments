@@ -48,13 +48,14 @@ end
 module App : sig
   val create: 
     init:(unit -> ('state, 'msg Lwt.t) Return.t) -> 
-    update:(stop:('a -> unit) -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> 
+    update:(stop:('a -> unit Lwt.t) -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> 
     unit Lwt.u * 'state Lwt_react.signal * 'a Lwt.t
 
 end = struct
 
   let create ~init ~update =
     
+    (* set equality for state signal to phyisical equality *)
     let eq = fun a b -> a == b in
 
     (* message events *)
@@ -80,7 +81,7 @@ end = struct
     let stop_promise, stop = Lwt.wait () in
 
     (* wrap Lwt.wakeup *)
-    let stop = Lwt.wakeup stop in
+    let stop = fun a -> return @@ Lwt.wakeup stop a in
 
     (* run update function on message event *)
     (* Note: we need to use fold_s to ensure atomic updates *)

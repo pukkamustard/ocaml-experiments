@@ -15,10 +15,14 @@ let init () =
 
 let update ~stop state = function
   | Ping -> 
-   if state > 2 then stop state else ();
     state + 1
       |> Return.singleton
-      |> Return.command (return Pong)
+      |> Return.command (if state > 2 then
+                           stop state >>= fun () ->
+                           return Pong
+                         else
+                           return Pong
+                        )
   | Pong ->
     state
       |> Return.singleton

@@ -5,36 +5,21 @@ open Reactor
 let address =
   Unix.ADDR_INET (Unix.inet_addr_loopback, 7777)
 
-type connection =
-  { input: Lwt_io.input_channel
-  ; output: Lwt_io.output_channel
-  ; socket: Lwt_unix.file_descr
-  }
-
-let connect sockaddr =
-  let socket = Lwt_unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
-  ( Lwt_unix.connect socket sockaddr >>= fun () ->
-    let input = Lwt_io.of_fd ~mode:Lwt_io.input socket in
-    let output = Lwt_io.of_fd ~mode:Lwt_io.output socket in
-    return {input = input; output = output; socket = socket}
-  )
-    |> Lwt_result.catch 
-
 type model =
-  { connection: connection option
+  { connection: Tcp.Client.connection option
   ; events : (string * string) list
   }
 
 type msg =
   | Connect
-  | ConnectResult of connection result
+  | ConnectResult of Tcp.Client.connection result
   | Send of string * string
   | Receive of string * string
   | Error of string
   | NoOp
   | NextEvent
-  | Close
-  | Stop
+  | Close of bool
+  | Stop of bool
 
 let init events () =
   {
@@ -53,7 +38,7 @@ let update ~stop model = function
     model
       |> Return.singleton
       |> Return.command (timeout 0.2 (Error "connect timeout") <?> 
-                        ( connect address >>= fun result ->
+                        ( Tcp.Client.connect address >>= fun result ->
                           return @@ ConnectResult result))
 
   | ConnectResult (Ok connection) ->
@@ -102,16 +87,16 @@ let update ~stop model = function
 
   | Error msg ->
     print_endline @@ "Error: " ^ msg;
-    stop false;
     model
       |> Return.singleton
+      |> Return.command (return @@ Close false)
 
   | NextEvent ->
     (match model.events with
       | [] ->
         model
           |> Return.singleton
-          |> Return.command (return Close)
+          |> Return.command (return @@ Close true)
 
       | (line, expectation) :: tail ->
         { model with events = tail }
@@ -119,23 +104,23 @@ let update ~stop model = function
           |> Return.command (return @@ Send (line,expectation))
     )
 
-  | Close ->
-   stop true;
+  | Close passed ->
     model
       |> Return.singleton
       |> Return.command (
         match model.connection with
           | Some connection ->
             Lwt_unix.close connection.socket >>= fun () ->
-            return Stop
+            return (Stop passed)
           | None ->
-            return Stop
+            return (Stop passed)
         )
  
-  | Stop ->
-    stop true;
+  | Stop passed ->
     model
       |> Return.singleton
+      |> Return.command (stop passed >>= fun () ->
+                        return NoOp)
 
   | NoOp ->
     model |> Return.singleton
@@ -146,19 +131,17 @@ let simulate events =
   Lwt.wakeup start ();
   Lwt_main.run app
 
-let events_gen = 
+let events = 
   let open QCheck.Gen in
-  pair nat nat >>= fun (a,b) ->
+  (pair nat nat >>= fun (a,b) ->
   return (Printf.sprintf "+ %d %d" a b, Printf.sprintf "%d" (a+b))
+  )
+    |> QCheck.make
+    |> QCheck.list
 
 let test =
   let open QCheck in
-  let events =
-    pair string string
-      |> set_gen events_gen
-      |> list
-  in
-  Test.make ~count:10000
+  Test.make ~count:100
    events simulate
 
 let () =
