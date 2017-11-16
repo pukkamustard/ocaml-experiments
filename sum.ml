@@ -5,7 +5,8 @@ type operation =
   | Add of (int * int)
 
 let compute = function
-  | Add (a,b) -> a + b
+  | Add (a,b) -> 
+      a + b
 
 let parser =
   let open Angstrom in
@@ -34,7 +35,7 @@ let service (address, in_channel, out_channel)=
          |> string_of_int
          |> Lwt_io.write_line out_channel
      | Error err -> 
-       "Parse error " ^ err
+       "ERROR"
           |> Lwt_io.write_line out_channel
          ) >>= fun () ->
 

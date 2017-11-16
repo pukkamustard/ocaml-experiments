@@ -5,12 +5,6 @@ open Reactor
 let address =
   Unix.ADDR_INET (Unix.inet_addr_loopback, 7777)
 
-type event =
-  { delay : float
-  ; command : string
-  ; expected_response: string
-  }
-
 type connection =
   { input: Lwt_io.input_channel
   ; output: Lwt_io.output_channel
@@ -28,7 +22,7 @@ let connect sockaddr =
 
 type model =
   { connection: connection option
-  ; events : event list
+  ; events : (string * string) list
   }
 
 type msg =
@@ -38,12 +32,14 @@ type msg =
   | Receive of string * string
   | Error of string
   | NoOp
-  | End
+  | NextEvent
+  | Close
+  | Stop
 
-let init () =
+let init events () =
   {
     connection = None
-  ; events = []
+  ; events = events
   }
     |> Return.singleton
     |> Return.command (return Connect)
@@ -54,7 +50,6 @@ let timeout t msg =
 
 let update ~stop model = function
   | Connect ->
-    print_endline "Connect";
     model
       |> Return.singleton
       |> Return.command (timeout 0.2 (Error "connect timeout") <?> 
@@ -62,10 +57,9 @@ let update ~stop model = function
                           return @@ ConnectResult result))
 
   | ConnectResult (Ok connection) ->
-    print_endline "Connected";
     { model with connection = Some connection }
       |> Return.singleton
-      |> Return.command (return @@ Send ("+ 1 2", "3"))
+      |> Return.command (return NextEvent)
 
   | ConnectResult (Error _) ->
     model
@@ -78,8 +72,12 @@ let update ~stop model = function
       |> Return.command (
         match model.connection with
         | Some connection ->
-          Lwt_io.read_line connection.input >>= fun received ->
-          return @@ Receive (expected, received)
+          timeout 0.2 (Error "timeout")
+            <?>
+          (
+            Lwt_io.read_line connection.input >>= fun received ->
+            return @@ Receive (expected, received)
+          )
         | None ->
           return @@ Error "not connected"
       )
@@ -97,7 +95,7 @@ let update ~stop model = function
     |> Return.singleton
     |> Return.command (
       if expected = received then
-        return End
+        return NextEvent
       else
         return @@ Error "received does not match expectation"
     )
@@ -108,7 +106,33 @@ let update ~stop model = function
     model
       |> Return.singleton
 
-  | End ->
+  | NextEvent ->
+    (match model.events with
+      | [] ->
+        model
+          |> Return.singleton
+          |> Return.command (return Close)
+
+      | (line, expectation) :: tail ->
+        { model with events = tail }
+          |> Return.singleton
+          |> Return.command (return @@ Send (line,expectation))
+    )
+
+  | Close ->
+   stop true;
+    model
+      |> Return.singleton
+      |> Return.command (
+        match model.connection with
+          | Some connection ->
+            Lwt_unix.close connection.socket >>= fun () ->
+            return Stop
+          | None ->
+            return Stop
+        )
+ 
+  | Stop ->
     stop true;
     model
       |> Return.singleton
@@ -117,10 +141,27 @@ let update ~stop model = function
     model |> Return.singleton
 
 
+let simulate events =
+  let (start, state, app) = App.create (init events) update in
+  Lwt.wakeup start ();
+  Lwt_main.run app
+
+let events_gen = 
+  let open QCheck.Gen in
+  pair nat nat >>= fun (a,b) ->
+  return (Printf.sprintf "+ %d %d" a b, Printf.sprintf "%d" (a+b))
+
+let test =
+  let open QCheck in
+  let events =
+    pair string string
+      |> set_gen events_gen
+      |> list
+  in
+  Test.make ~count:10000
+   events simulate
 
 let () =
-  let (start, state, app) = App.create init update in
-  Lwt.wakeup start ();
-  Lwt_main.run (app >>= fun value -> 
-                   Printf.sprintf "App returned with value: %b\n" value |> print_string;
-                   return ())
+  QCheck_runner.run_tests_main [test]
+
+

@@ -20,11 +20,16 @@ let start service port =
     let worker () = 
       let in_channel = Lwt_io.of_fd ~mode:Lwt_io.input client_socket in
       let out_channel = Lwt_io.of_fd ~mode:Lwt_io.output client_socket in
-      service (address, in_channel, out_channel) >>= fun () ->
-      if state socket = Opened then close client_socket else return ()
+      Lwt.catch 
+        (fun () ->
+           service (address, in_channel, out_channel)
+        ) 
+        (fun ex -> 
+             close client_socket
+        )
     in
 
-    Lwt.async (fun () -> Lwt.catch worker (fun ex -> print_endline @@ Printexc.to_string ex; return ()));
+    Lwt.async worker;
     accept_loop socket
   in
 

@@ -46,11 +46,16 @@ end
 
 
 module App : sig
-  val create: ?eq:('state -> 'state -> bool) -> init:(unit -> ('state, 'msg Lwt.t) Return.t) -> update:(stop:('a -> unit) -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> unit Lwt.u * 'state Lwt_react.signal * 'a Lwt.t
+  val create: 
+    init:(unit -> ('state, 'msg Lwt.t) Return.t) -> 
+    update:(stop:('a -> unit) -> 'state -> 'msg -> ('state, 'msg Lwt.t) Return.t) -> 
+    unit Lwt.u * 'state Lwt_react.signal * 'a Lwt.t
+
 end = struct
-  let create ?eq ~init ~update =
+
+  let create ~init ~update =
     
-    let eq = match eq with None -> fun a b -> a == b | Some eq -> eq in
+    let eq = fun a b -> a == b in
 
     (* message events *)
     let msg_e, send_msg = E.create () in
