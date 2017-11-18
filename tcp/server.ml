@@ -1,6 +1,4 @@
 open Lwt
-open BatPervasives
-
 
 (** Bind, listen and run service for every new connection *)
 let start service port =

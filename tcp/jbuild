@@ -2,5 +2,5 @@
 
 (library
   ((name tcp)
-   (libraries (lwt batteries lwt.unix))
+   (libraries (lwt lwt.unix))
   ))

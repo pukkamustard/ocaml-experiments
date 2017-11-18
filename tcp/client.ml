@@ -1,5 +1,4 @@
 open Lwt
-open BatPervasives
 
 type connection =
   { input: Lwt_io.input_channel
