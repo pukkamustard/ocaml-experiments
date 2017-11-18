@@ -46,9 +46,10 @@ end
 (** An Elm inspired way of doing functional reactive programming *)
 module App : sig
 
-  (** An app is an object with a function to start the application, a signal carrying the model and a promise that resolves to the result of the app's computation *)
-  type ('a, 'model) t = 
+  (** An app is an object with a function to start the application, a function to send messages to the running app, a signal carrying the model and a promise that resolves to the result of the app's computation *)
+  type ('a, 'model, 'msg) t = 
     { start: unit Lwt.u
+    ; send: ?step:React.step -> 'msg -> unit
     ; model_signal : 'model Lwt_react.signal
     ; result : ('a, exn) Lwt_result.t
     }
@@ -62,12 +63,13 @@ module App : sig
   val create: 
     init: ('model, 'msg) init -> 
     update:('a, 'model, 'msg) update ->
-    ('a, 'model) t
+    ('a, 'model, 'msg) t
 
 end = struct
 
-  type ('a, 'model) t = 
+  type ('a, 'model, 'msg) t = 
     { start: unit Lwt.u
+    ; send: ?step:React.step -> 'msg -> unit
     ; model_signal : 'model Lwt_react.signal
     ; result : ('a, exn) Lwt_result.t
     }
@@ -129,6 +131,7 @@ end = struct
     let result = Lwt.catch (fun () -> result) (fun e -> return @@ Error e) in
 
     { start = start
+    ; send = send_msg
     ; model_signal = model_signal
     ; result = result
     }
