@@ -20,9 +20,9 @@ let parser =
     take_while1 (function '0' .. '9' -> true | _ -> false) >>| int_of_string
   in
   return (fun a b -> Add (a,b))
-    <* char '+'
-    <* char ' '
     <*> integer
+    <* char ' '
+    <* char '+'
     <* char ' '
     <*> integer
     <* end_of_input
@@ -34,7 +34,7 @@ let service (address, in_channel, out_channel)=
     Lwt_io.read_line in_channel >>= fun line ->
     print_endline line;
 
-    (match Angstrom.parse_only parser (`String line) with
+    (match Angstrom.parse_string parser line with
      | Ok op -> 
        compute op
          |> string_of_int

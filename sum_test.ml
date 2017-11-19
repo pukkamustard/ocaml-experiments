@@ -150,7 +150,7 @@ let events =
   let gen =
     let open QCheck.Gen in
     pair nat nat >>= fun (a,b) ->
-    return (Printf.sprintf "+ %d %d" a b, Printf.sprintf "%d" (a+b))
+    return (Printf.sprintf "%d + %d" a b, Printf.sprintf "%d" (a+b))
   in
   QCheck.make ~print:print gen
     |> QCheck.list
