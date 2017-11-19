@@ -15,3 +15,16 @@ let connect sockaddr =
   )
     |> Lwt_result.catch 
 
+(* TODO: this might be a nice place to play with Functors. Define something that is a reader and somehow Functor magic so that it can read any kind of data (line, char, byte,...) *)
+let read_line (on_read:string -> unit) connection =
+  let rec read_loop () = 
+    Lwt_io.read_line connection.input >>= fun line ->
+    on_read line;
+    read_loop ()
+  in
+  Lwt.catch (fun () -> read_loop () >>= fun _ -> return ()) 
+    (fun e -> 
+       match e with
+       | End_of_file -> return ()
+       | e -> raise e
+    )

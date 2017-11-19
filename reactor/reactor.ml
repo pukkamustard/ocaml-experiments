@@ -57,7 +57,7 @@ module App : sig
   (** An init function retuns the initial model and side-effects. *)
   type ('model, 'msg) init = unit -> ('model, 'msg Lwt.t) Return.t
 
-  type ('a, 'model, 'msg) update = stop:('a -> unit Lwt.t) -> 'model -> 'msg -> ('model, 'msg Lwt.t) Return.t
+  type ('a, 'model, 'msg) update = stop:('a -> unit) -> send_msg:(?step:React.step -> 'msg -> unit) -> 'model -> 'msg -> ('model, 'msg Lwt.t) Return.t
 
 (** [create ~init:init ~update:update] creates an app described by the provided [init] and [update] functions. *)
   val create: 
@@ -76,7 +76,7 @@ end = struct
 
   type ('model, 'msg) init = unit -> ('model, 'msg Lwt.t) Return.t
 
-  type ('a, 'model, 'msg) update = stop:('a -> unit Lwt.t) -> 'model -> 'msg -> ('model, 'msg Lwt.t) Return.t
+  type ('a, 'model, 'msg) update = stop:('a -> unit) -> send_msg:(?step:React.step -> 'msg -> unit) -> 'model -> 'msg -> ('model, 'msg Lwt.t) Return.t
 
   let create ~init ~update =
     
@@ -92,7 +92,7 @@ end = struct
     (* app result and resolver *)
     let result, resolver = Lwt.task () in
     let on_exception = fun e -> Lwt.wakeup resolver (Error e) in
-    let on_stop = fun a -> return @@ Lwt.wakeup resolver (Ok a) in
+    let on_stop = fun a -> Lwt.wakeup resolver (Ok a) in
 
     (* run the commands and send results on as messages *)
     (* Note: we need to keep this from the garbage collector *)
@@ -111,7 +111,7 @@ end = struct
     (* Note: we need to use fold_s to ensure atomic updates *)
     let model_signal = S.fold_s ~eq:eq (fun model msg -> 
         try 
-        update ~stop:on_stop model msg 
+        update ~stop:on_stop ~send_msg:send_msg model msg 
           |> Return.run send_cmd 
           |> return
         with

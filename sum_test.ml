@@ -5,98 +5,109 @@ open Reactor
 let address =
   Unix.ADDR_INET (Unix.inet_addr_loopback, 7777)
 
-type model =
-  { connection: Tcp.Client.connection option
-  ; events : (string * string) list
-  }
-
 type msg =
   | Connect
   | ConnectResult of Tcp.Client.connection result
+  | ReaderResult of unit result
   | Send of string * string
-  | Receive of string * string
-  | Error of string
-  | NoOp
+  | SendResult of unit result
+  | Receive of string
   | NextEvent
-  | Close of bool
-  | Stop of bool
+  | CloseConnection
+  | Stop
+
+type model =
+  { connection: Tcp.Client.connection option
+  ; reader: msg Lwt.t option
+  (* TODO: use functional (non mutable) CCFQueue *)
+  ; expecting: string Queue.t
+  ; events : (string * string) list
+  }
 
 let init events () =
   {
     connection = None
+  ; reader = None
+  ; expecting = Queue.create ()
   ; events = events
   }
     |> Return.singleton
     |> Return.command (return Connect)
 
+exception Sim_Error of string
+
 let timeout t msg =
   Lwt_unix.sleep t >>= fun () ->
-  return msg
+  raise @@ Sim_Error msg
 
-let update ~stop model = function
+let update ~stop ~(send_msg:?step:React.step -> 'msg -> unit) model = function
   | Connect ->
     model
       |> Return.singleton
-      |> Return.command (timeout 0.2 (Error "connect timeout") <?> 
+      |> Return.command (timeout 0.2 "timeout while connecting" <?> 
                         ( Tcp.Client.connect address >>= fun result ->
                           return @@ ConnectResult result))
 
   | ConnectResult (Ok connection) ->
-    { model with connection = Some connection }
+    let reader = 
+      Tcp.Client.read_line (fun line -> send_msg @@ Receive line) connection
+        |> Lwt_result.catch
+        |> Lwt.map (fun result -> ReaderResult result)
+    in
+    { model with connection = Some connection; reader = Some reader }
       |> Return.singleton
       |> Return.command (return NextEvent)
+      |> Return.command reader
 
-  | ConnectResult (Error _) ->
-    model
-      |> Return.singleton
-      |> Return.command (return @@ Error "connect failed")
+  | ConnectResult (Error e) ->
+    raise e
 
-  | Send (line,expected) ->
-    model 
-      |> Return.singleton
-      |> Return.command (
-        match model.connection with
-        | Some connection ->
-          timeout 0.2 (Error "timeout")
-            <?>
-          (
-            Lwt_io.read_line connection.input >>= fun received ->
-            return @@ Receive (expected, received)
-          )
-        | None ->
-          return @@ Error "not connected"
-      )
-      |> Return.command (
-        match model.connection with
-        | Some connection ->
-          Lwt_io.write_line connection.output line >>= fun () ->
-          return NoOp
-        | None ->
-          return @@ Error "not connected"
-      )
-
-  | Receive (expected, received) ->
-    model 
-    |> Return.singleton
-    |> Return.command (
-      if expected = received then
-        return NextEvent
-      else
-        return @@ Error "received does not match expectation"
+  | ReaderResult result ->
+    (match result with
+     | Ok () ->
+       model |> Return.singleton
+     | Error Lwt.Canceled ->
+       model |> Return.singleton
+     | Error e ->
+       raise e
     )
 
-  | Error msg ->
-    print_endline @@ "Error: " ^ msg;
+  | Send (line,expected) ->
+    (match model.connection with
+      | Some connection ->
+        Queue.push expected model.expecting;
+        model
+          |> Return.singleton
+          |> Return.command (Lwt_io.write_line connection.output line
+                            |> Lwt_result.catch
+                            |> Lwt.map (fun result -> SendResult result)
+                           )
+      | None ->
+        raise @@ Sim_Error "tyring to send while not connected"
+    )
+
+  | SendResult (Ok ()) ->
     model
       |> Return.singleton
-      |> Return.command (return @@ Close false)
+
+  | SendResult (Error e) ->
+    raise e
+
+  | Receive line ->
+    let expected = Queue.pop model.expecting in
+    if expected <> line then
+      raise @@ Sim_Error ("expecting: " ^ expected ^ " received: " ^ line) 
+    else
+      model 
+      |> Return.singleton
+      |> Return.command (return NextEvent)
 
   | NextEvent ->
     (match model.events with
       | [] ->
         model
           |> Return.singleton
-          |> Return.command (return @@ Close true)
+          |> Return.command (return CloseConnection)
 
       | (line, expectation) :: tail ->
         { model with events = tail }
@@ -104,26 +115,23 @@ let update ~stop model = function
           |> Return.command (return @@ Send (line,expectation))
     )
 
-  | Close passed ->
-    model
+  | CloseConnection ->
+    CCOpt.map_or ~default:() Lwt.cancel model.reader;
+    {model with connection = None; reader = None}
       |> Return.singleton
       |> Return.command (
         match model.connection with
           | Some connection ->
             Lwt_unix.close connection.socket >>= fun () ->
-            return (Stop passed)
+            return Stop
           | None ->
-            return (Stop passed)
+            return Stop
         )
  
-  | Stop passed ->
+  | Stop ->
+    stop true;
     model
       |> Return.singleton
-      |> Return.command (stop passed >>= fun () ->
-                        return NoOp)
-
-  | NoOp ->
-    model |> Return.singleton
 
 
 let simulate events =
@@ -131,7 +139,7 @@ let simulate events =
   Lwt.wakeup app.start ();
   match Lwt_main.run app.result with
   | Ok value -> value
-  | Error e -> false
+  | Error e -> raise e
 
 
 let events = 
@@ -144,7 +152,7 @@ let events =
 
 let test =
   let open QCheck in
-  Test.make ~count:100
+  Test.make ~count:10000
    events simulate
 
 let () =

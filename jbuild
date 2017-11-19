@@ -3,4 +3,4 @@
 
 (executables
  ((names (ping echo sum sum_test test_open))
-  (libraries (qcheck angstrom reactor tcp lwt_react lwt lwt.unix))))
+  (libraries (qcheck containers angstrom reactor tcp lwt_react lwt lwt.unix))))

@@ -26,7 +26,6 @@ let service (address, in_channel, out_channel)=
 
   let rec read_and_sum () =
     Lwt_io.read_line in_channel >>= fun line ->
-
     print_endline line;
 
     (match Angstrom.parse_only parser (`String line) with

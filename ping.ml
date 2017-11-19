@@ -13,16 +13,15 @@ let init () =
     |> Return.singleton
     |> Return.command (return Ping)
 
-let update ~stop model = function
+let update ~stop ~send_msg model = function
   | Ping -> 
+    if model > 2 then
+      stop model
+    else
+      ();
     model + 1
       |> Return.singleton
-      |> Return.command (if model > 2 then
-                           stop model >>= fun () ->
-                           return Pong
-                         else
-                           return Pong
-                        )
+      |> Return.command (return Pong)
   | Pong ->
     model
       |> Return.singleton
