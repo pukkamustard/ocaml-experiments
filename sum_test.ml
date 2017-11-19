@@ -143,16 +143,21 @@ let simulate events =
 
 
 let events = 
-  let open QCheck.Gen in
-  (pair nat nat >>= fun (a,b) ->
-  return (Printf.sprintf "+ %d %d" a b, Printf.sprintf "%d" (a+b))
-  )
-    |> QCheck.make
+  let print = 
+    let open QCheck.Print in
+    pair string string
+  in
+  let gen =
+    let open QCheck.Gen in
+    pair nat nat >>= fun (a,b) ->
+    return (Printf.sprintf "+ %d %d" a b, Printf.sprintf "%d" (a+b))
+  in
+  QCheck.make ~print:print gen
     |> QCheck.list
 
 let test =
   let open QCheck in
-  Test.make ~count:10000
+  Test.make ~count:1000
    events simulate
 
 let () =

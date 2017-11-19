@@ -4,8 +4,14 @@ open Lwt
 type operation =
   | Add of (int * int)
 
+
+let the_number_i_mess_up = 300
+
 let compute = function
   | Add (a,b) -> 
+    if a = the_number_i_mess_up then
+      a + b + 1
+    else 
       a + b
 
 let parser =
