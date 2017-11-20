@@ -134,14 +134,6 @@ let update ~stop ~(send_msg:?step:React.step -> 'msg -> unit) model = function
       |> Return.singleton
 
 
-let simulate events =
-  let app = App.create (init events) update in
-  Lwt.wakeup app.start ();
-  match Lwt_main.run app.result with
-  | Ok value -> value
-  | Error e -> raise e
-
-
 let events = 
   let print = 
     let open QCheck.Print in
@@ -158,7 +150,7 @@ let events =
 let test =
   let open QCheck in
   Test.make ~count:1000
-   events simulate
+   events (fun events -> App.run_exn @@ App.create (init events) update)
 
 let () =
   QCheck_runner.run_tests_main [test]

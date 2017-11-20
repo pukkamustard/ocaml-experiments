@@ -59,11 +59,17 @@ module App : sig
 
   type ('a, 'model, 'msg) update = stop:('a -> unit) -> send_msg:(?step:React.step -> 'msg -> unit) -> 'model -> 'msg -> ('model, 'msg Lwt.t) Return.t
 
-(** [create ~init:init ~update:update] creates an app described by the provided [init] and [update] functions. *)
+  (** [create ~init:init ~update:update] creates an app described by the provided [init] and [update] functions. *)
   val create: 
     init: ('model, 'msg) init -> 
     update:('a, 'model, 'msg) update ->
     ('a, 'model, 'msg) t
+
+  (** [run app] run the app *)
+  val run: ('a, 'model, 'msg) t -> 'a result
+
+  (** [run app] Same as {!run}, but fails when app raises exception. *)
+  val run_exn: ('a, 'model, 'msg) t -> 'a
 
 end = struct
 
@@ -135,4 +141,14 @@ end = struct
     ; model_signal = model_signal
     ; result = result
     }
+
+  let run app =
+    Lwt.wakeup app.start ();
+    Lwt_main.run app.result
+
+  let run_exn app =
+    match run app with
+    | Ok value -> value
+    | Error e -> raise e
+
 end
